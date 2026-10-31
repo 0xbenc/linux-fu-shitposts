@@ -1,0 +1,11 @@
+[Unit]
+Description=Reset MV-SILICON USB Speaker PipeWire level on session start (repair + once-per-boot default)
+After=pipewire.service wireplumber.service
+Wants=pipewire.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/reset-usb-speaker-pipewire-session.sh
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,326 @@
+# WaveShare / NVIDIA black screen — AI context dump
+
+Incident and repair: **2026-10-30**. Tested Linux setup: **CachyOS, NVIDIA 580.178.04, SDDM/Xorg and Niri/Wayland**. This is a record of an actual fix, with its deployed sources and original broken input. It is also the context needed to adapt the fix or continue debugging. Start with [the human version](human.md) for the short procedure.
+
+## Current result and remaining qualification
+
+The user confirmed the login screen and a fresh Niri desktop were both visible and correctly oriented. The physical panel receives **1080×1920 at 61.343 Hz**; rotation produces a **1920×1080 landscape desktop**. A wallpaper refresh restored its appearance without changing its selected image or saved settings.
+
+A user reboot confirmed the kernel repair loaded automatically. It also exposed a remaining Xorg startup gap. We extended the helper, refreshed only the greeter, and verified a subsequent login. **There was no second reboot after this last extension.** Do not rewrite this as an uninterrupted, completely successful reboot of the final revision.
+
+Detailed, redacted evidence is in [session.json](evidence/session.json). It retains the first installation, the final installation, original/fixed EDID bytes, guard results, the initial reboot failure, and the successful follow-up. [Maintenance notes](evidence/maintenance-notes.md) preserve the relevant investigation. [Provenance](evidence/provenance.json) identifies the private source records by hash and describes the public derivative.
+
+## What the user wanted
+
+The initial scope was a remote health check. It became diagnosis of a screen that worked before Linux took over but went black after the bootloader. The user eventually gave the explicit instruction **“make it work.”**
+
+Relevant reports and preferences:
+
+- The cable was Mini DisplayPort → HDMI and had worked with other displays, including 4K60. Do not turn the first missing-EDID observation into a claim that the cable was defective.
+- The screen was described as “1080p” with a vertical default. There was no findable retail model or product link.
+- The user could not identify it from an existing GitHub repository. Direct hardware reads ultimately identified the brand and timing.
+- A portrait picture was not the desired final orientation. The first `90` transform was upside down. `270` was accepted as upright and stable.
+- A settings reload briefly made it vertical again. Reapply a temporary transform only after the reload has settled.
+- The wallpaper looked wrong after the geometry changes. Keep its image selection and preferences; refresh its renderer.
+- Preserve unrelated monitor settings and the active desktop. Do not force a logout or reboot merely to make a verification claim.
+
+## Environment
+
+| Item | Observed value |
+| --- | --- |
+| Distribution / kernel | CachyOS, `7.2.8-1-cachyos`, x86-64 |
+| Graphics relevant to this fix | NVIDIA, tested PCI/connector profile `0000:02:00.0` / DP-2 |
+| NVIDIA driver | Open kernel module / Xorg driver `580.178.04` |
+| Login screen | SDDM, using Xorg on tty2 |
+| Desktop | Niri `26.04 (8ed0da4)`, Wayland |
+| Shell / wallpaper | Noctalia `v4.7.7`, `qs -c noctalia-shell` |
+| Connection | Mini DisplayPort → HDMI converter cable |
+| Connected DRM output | `/sys/class/drm/card1-DP-2` |
+| Xorg output / device | `DP-2`, `DFP-2`, `DPY-2` |
+| DDC bus | `/dev/i2c-2`, named `NVIDIA i2c adapter 4 at 2:00.0` |
+| Screen EDID identity | Manufacturer `HOT`, model `20300`, name `WaveShare`, dummy serial `1` |
+| Fresh Niri identity | `PNP(HOT) WaveShare 0x00000001` |
+
+The exact retail screen model was never established. The EDID's product number is not a verified catalog model. Its reported physical dimensions are implausible and were preserved rather than guessed.
+
+The initial health check did not identify a system-wide failure explaining the display problem. Incidental CPU/GPU inventory, memory/storage quantities and unrelated Wi-Fi findings are omitted from the public post. The distro, driver, display stack and exact connector profile remain because they affect reproduction.
+
+## The decisive evidence
+
+Initially the kernel exposed **zero EDID bytes** and only fallback modes up to 1024×768. Xorg was running a greeter at 1024×768. That established a monitor-data problem, not its exact cause.
+
+Direct DDC reads recovered **256 bytes**, and both 128-byte block checksums were valid. The data nevertheless contained a malformed detailed timing descriptor. Testing the original bytes as Xorg's `CustomEDID` made the driver report:
+
+```text
+The EDID read for display device DP-2 is invalid:
+- The EDID has a bad detailed timing descriptor.
+```
+
+This is stronger evidence than an empty sysfs EDID. It identifies the driver rejection directly.
+
+The recovered data included two useful, intact timings:
+
+| Mode | Pixel clock | Horizontal timing | Vertical timing | Polarity |
+| --- | --- | --- | --- | --- |
+| Native 1080×1920, 61.342668 Hz | 150.000 MHz | 1080 / 1192 / 1208 / 1240 | 1920 / 1952 / 1962 / 1972 | + / + |
+| 1920×1080, 60 Hz | 148.500 MHz | 1920 / 2008 / 2052 / 2200 | 1080 / 1084 / 1089 / 1125 | + / + |
+
+The first is native portrait timing. Rotation must be handled separately from the wire timing.
+
+### The EDID repair, byte for byte
+
+Original: [edid-raw.bin](files/root/usr/local/share/waveshare-display/edid-raw.bin), SHA-256:
+
+```text
+32e8ad5ca55f0133ec2d758a9937ab417d98c179681399ec45860d9633c3f70e
+```
+
+Corrected: [edid-fixed.bin](files/root/usr/local/share/waveshare-display/edid-fixed.bin), SHA-256:
+
+```text
+3a5552c40b66dad2b09603a4178fe89da92bb0f70b3051ed3921b0f5e3931e5f
+```
+
+All byte offsets below are zero based:
+
+- Bytes **90–107**: replace the malformed descriptor, whose pixel-clock bytes were `4f 00`, with a standard dummy descriptor.
+- Bytes **108–125**: replace the empty descriptor with another standard dummy descriptor.
+- Byte **127**: recalculate the base-block checksum.
+- Preserve the valid native timing at **54–71** and the **entire extension block, 128–255**, unchanged.
+
+The dummy descriptor is exactly 18 bytes:
+
+```text
+00 00 00 10 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+```
+
+Reproduce and check the transformation from the post directory:
+
+```sh
+python3 - <<'PY'
+from pathlib import Path
+root = Path('files/root/usr/local/share/waveshare-display')
+raw = root.joinpath('edid-raw.bin').read_bytes()
+fixed = bytearray(raw)
+dummy = bytes.fromhex('000000100000000000000000000000000000')
+assert len(raw) == 256 and len(dummy) == 18
+fixed[90:108] = dummy
+fixed[108:126] = dummy
+fixed[127] = (-sum(fixed[:127])) % 256
+assert bytes(fixed) == root.joinpath('edid-fixed.bin').read_bytes()
+assert fixed[54:72] == raw[54:72]
+assert fixed[128:] == raw[128:]
+assert all(sum(fixed[n:n + 128]) % 256 == 0 for n in (0, 128))
+print('Exact repair verified; valid timings preserved')
+PY
+```
+
+This edits a **software copy**. Nothing was written to the display's firmware or EDID EEPROM. Other original conformance problems, including CTA omissions and bogus dimensions, remain. `edid-decode --check` still reports failures for those omissions; it is incorrect to describe the corrected file as fully standards compliant. NVIDIA accepted it and the screen displayed its advertised timing.
+
+### Cause versus inference
+
+**Observed:** the display supplies malformed identification data; NVIDIA rejects that descriptor; correcting it restores the same screen through the same cable.
+
+**Inference:** the boot display path tolerates or avoids the bad record while the Linux driver parses it strictly. We did not instrument the boot firmware's parsing behavior.
+
+The cable proved usable for the successful display mode and identification reads. No exhaustive cable qualification was performed. There was no evidence that 4K/1080p bandwidth or general machine health caused this incident. A rotation setting could not explain a missing picture while the wrong mode was being transmitted.
+
+## Investigation, including dead ends
+
+1. Confirmed the host was reachable, responsive and broadly healthy over SSH.
+2. Found SDDM and Xorg running; only NVIDIA DP-2 was connected. Intel outputs were disconnected. The NVIDIA driver was loaded, so “no graphics driver” was not the diagnosis.
+3. Saw empty EDID, 1024×768 fallback and no monitor-specific Xorg configuration. Initial hypotheses included the cable/adapter handshake, display firmware and driver behavior.
+4. Searched 26 public `0xbenc` repositories and relevant trees for existing display notes. No relevant setup was found. Private enumeration on the host failed with HTTP401. Do not repeat that search as though it identified the panel.
+5. Direct SSH-user X queries failed authorization; sudo required a password. The account's existing Docker administration access later supplied a controlled route to host tools. This was not an inherent lack of administrative access.
+6. Queried the real Xorg session. It had an active output at 1024×768. The earlier DRM `disabled`/DPMS-Off view alone was misleading for NVIDIA's Xorg handling.
+7. Reset screen blanking / forced display power on. DPMS was already On. Switched to an accepted 1280×720 mode. The user still reported **no signal**.
+8. Tried adding standard 1920×1080@60 and then the recovered native mode using Xrandr. Both were rejected with `BadMatch` before a usable mode switch. A hand-built resolution was not enough while the EDID was rejected.
+9. Loaded `i2c-dev` and read only the EDID address on NVIDIA's adapters. Adapter4 / bus2 returned the WaveShare data. The other four NVIDIA adapters returned I/O errors. No unrelated SMBus or RAM-device scan was needed.
+10. Used the raw recovered data as an Xorg `CustomEDID`. It was still rejected, now with the explicit bad-descriptor reason. Valid checksums had not made it valid data.
+11. Replaced the two bad/empty descriptors in a copy. Xorg accepted it and the user confirmed the login screen was on. A temporary automatic rollback was scheduled for this experiment, then stopped after confirmation.
+12. Signing into Wayland went black again. The Xorg-only copy did not repair kernel monitor data. A custom Niri modeline also failed its DRM mode test. Applied the corrected bytes through the connected output's DRM debugfs override, reprobed and emitted a DRM change event. The desktop worked.
+13. `90` rotation was upside down. `270` was accepted. A Niri configuration reload subsequently cleared a temporary transform; reapplied it after reload settled and verified repeated stable output queries.
+14. Refreshed the wallpaper renderer without changing its selected image or preferences. The user confirmed it looked normal.
+15. Installed a monitor-matched startup/hotplug helper and greeter orientation. The first user reboot proved the kernel override loaded automatically, but Xorg independently reread the original hardware EDID and fell back again.
+16. Extended the helper to generate a matching Xorg configuration too. Refreshed only the greeter, verified its mode and rotation, and observed a fresh Niri login using the saved identity-matched configuration. User: **both look correct**.
+
+Keep steps 11, 12 and 15 together: each explains why a plausible earlier “fix” was incomplete.
+
+## Final implementation
+
+The exact deployed revision is bundled under [files/root](files/root/). [install-paths.txt](files/install-paths.txt) lists the **eight static install inputs**. A ninth file is generated conditionally; do not install its [reference copy](files/generated-xorg.conf) unconditionally.
+
+| Host path | Role |
+| --- | --- |
+| `/usr/local/libexec/waveshare-edid-prepare.py` | Exact identity check, kernel correction, conditional Xorg configuration and safe greeter refresh |
+| `/usr/local/share/waveshare-display/edid-raw.bin` | Preserved broken input |
+| `/usr/local/share/waveshare-display/edid-fixed.bin` | Verified corrected software copy |
+| `/etc/systemd/system/waveshare-edid.service` | One-shot helper with a 15-second timeout |
+| `/etc/systemd/system/sddm.service.d/30-waveshare-edid.conf` | SDDM wants the helper and starts after it |
+| `/etc/udev/rules.d/90-waveshare-edid.rules` | DRM changes request a nonblocking helper run |
+| `/usr/local/libexec/waveshare-greeter-setup` | Runs the original Xsetup, then rotates only this corrected monitor |
+| `/etc/sddm.conf.d/30-waveshare-edid.conf` | Selects that greeter setup command |
+| `/etc/X11/xorg.conf.d/99-waveshare-edid.conf` | Generated `CustomEDID` for matching hardware; removed when it no longer matches |
+
+The helper:
+
+- Loads `i2c-dev`, takes an exclusive nonblocking lock, and verifies the corrected file's SHA-256.
+- Finds the expected NVIDIA GPU and DP-2 connector. Card numbering may change; PCI identity is the anchor.
+- Reads the raw EDID from the specifically named DDC adapter and compares its **entire SHA-256** with the known faulty input. A similar product name is insufficient.
+- On a match, ensures Xorg has a configuration pointing at the corrected file and supplies the same bytes to the kernel's connector override.
+- On a different or absent screen, removes its own kernel/Xorg overrides and preserves unrelated overrides.
+- Reprobes/emits a change event only when kernel state actually changes. Repeated invocations for already-correct state are idempotent.
+- Refreshes an active greeter if its generated Xorg configuration changed, provided no non-SDDM user has a seat0 desktop. It does not restart a logged-in desktop or a greeter still starting.
+
+The greeter setup preserves `/usr/share/sddm/scripts/Xsetup`. It checks the kernel's corrected EDID before using Xrandr `--rotate right`. On the tested mounting, that corresponds to the desired orientation. Niri uses the saved `transform "270"` block in [niri-output.kdl](files/niri-output.kdl).
+
+No GPU driver upgrade, bootloader edit, initramfs rebuild or global EDID override was needed. Do not replace the per-connector fix with an override applied to every connector.
+
+## Runtime diagnostics and recovery
+
+These are the operations used during the incident. Run privileged commands on the host; do not substitute an arbitrary container's `/sys` or device nodes.
+
+```sh
+# Find connectors and their current status.
+for p in /sys/class/drm/card*-*; do
+    [ -f "$p/status" ] || continue
+    printf '%s: ' "$p"
+    cat "$p/status"
+done
+
+# Identify the DDC buses; bus numbers are not universal.
+for p in /sys/bus/i2c/devices/i2c-*; do
+    printf '%s: ' "$p"
+    cat "$p/name"
+done
+
+# Compare the kernel's data with the saved fix.
+wc -c /sys/class/drm/card1-DP-2/edid
+sha256sum /sys/class/drm/card1-DP-2/edid \
+    /usr/local/share/waveshare-display/edid-fixed.bin
+```
+
+The direct read uses I2C address `0x50`, writes only an offset pointer, then reads 128 bytes. It repeats at offset128 for this screen's one extension block. It does not program the EEPROM. The deployed helper contains the exact ctypes message structures and `I2C_RDWR` operation used successfully. After identifying the correct bus, the following recovers the original raw data using that function:
+
+```sh
+sudo modprobe i2c-dev
+sudo python3 - <<'PY' > recovered-edid.bin
+import importlib.util
+import sys
+from pathlib import Path
+path = '/usr/local/libexec/waveshare-edid-prepare.py'
+spec = importlib.util.spec_from_file_location('guard', path)
+guard = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(guard)
+sys.stdout.buffer.write(guard.read_edid(Path('/sys/bus/i2c/devices/i2c-2')))
+PY
+edid-decode --check recovered-edid.bin
+```
+
+The successful Wayland runtime correction was equivalent to:
+
+```sh
+sudo sh -c 'cat /usr/local/share/waveshare-display/edid-fixed.bin > /sys/kernel/debug/dri/0000:02:00.0/DP-2/edid_override'
+sudo sh -c 'printf "detect\n" > /sys/class/drm/card1-DP-2/status'
+sudo udevadm trigger --action=change /sys/class/drm/card1
+```
+
+Use these paths only after identifying the GPU/output. The installed helper performs the identity guard first; the three manual commands do not.
+
+### SSH, Xauthority and the administrative route
+
+The SSH account lacked passwordless sudo, but was a member of the host's Docker administrative group. Existing local Ubuntu containers could run host tools through a read-only host-root bind and chroot. Instances were temporary (`--rm`), network disabled, and did not pull new images or modify existing application containers.
+
+For Xorg queries, the container needed the host's hostname so the local Xauthority entry matched, and read access to the SDDM-owned authority file. Host systemd queries also needed the host PID namespace. The relevant capabilities for read access/chroot were `SYS_CHROOT` and `DAC_OVERRIDE`; `SYS_MODULE` was used when loading `i2c-dev` directly. No authentication cookie was printed or preserved in this repo.
+
+Host-root binds were read-only by default; explicitly scoped writable mounts were used for actual files/interfaces being changed. `systemd-analyze verify` could not prepare its temporary working area inside the read-only chroot. Running that verification as a transient host systemd service succeeded. This was a limitation of the verification environment, not an invalid service unit.
+
+The human instructions assume normal sudo. They are a newly organized replay procedure, **not a claim that this exact installation loop was rerun on the live host**. Its source files are byte-identical to the final deployed revision. Docker administration should not be introduced on a machine that already has ordinary sudo simply to imitate the incident.
+
+## Adapting to another machine
+
+Discover these values afresh; do not blindly rename only `DP-2`:
+
+1. NVIDIA PCI address, DRM card/connector path, Xorg device alias, and actual DDC bus/name. Their numbering systems are related on this host, not guaranteed universally.
+2. The panel's original EDID and exact failure. Preserve it before editing anything. A different panel needs its own diagnosis and identity guard.
+3. A corrected EDID that preserves that panel's valid timings. The bundle is specifically for the recorded malformed input, not a generic 1080p replacement.
+4. Your display manager's startup ordering and any existing Xsetup override. Preserve existing setup commands and configuration precedence.
+5. Your compositor's name/matching rules, config layout, and desired physical rotation. A physically rotated ordinary monitor and a portrait-native panel are different cases.
+6. Which permission route is already authorized and available. Keep evidence free of credentials and authority-cookie contents.
+
+On this host `/sys/kernel/debug/dri/0000:02:00.0/DP-2/edid_override` existed and was writable to host root. Source inspection of the installed NVIDIA driver confirmed its support for DRM EDID overrides. Neither debugfs availability nor behavior on another driver/kernel was established here.
+
+## Validation and its limits
+
+Recorded live checks:
+
+- Recovered the original EDID twice with valid base/extension checksums.
+- Reproduced NVIDIA rejection using the original bytes, then acceptance using the corrected bytes.
+- Verified kernel EDID changed from 0 to 256 bytes and matched the corrected SHA-256.
+- Verified exact mode, rotation and geometry with Xrandr and Niri IPC; user confirmed the picture and orientation.
+- Passed host `systemd-analyze verify` and `niri validate`; the actual one-shot helper reported success.
+- Confirmed all installed sources/hashes and root ownership.
+- Observed the first reboot's automatically applied kernel fix, caught the Xorg gap, and verified corrected login-screen startup plus a fresh desktop login in that boot.
+- Preserved original Niri settings as an exact prefix. Stored a rollback copy under the user's persistent state directory after reboot cleared `/tmp`.
+- Restored Noctalia settings byte-for-byte after refreshing the wallpaper renderer; user confirmed the wallpaper looked normal.
+
+The guard's eight isolated checks cover: target application, idempotence, removing its overrides for a different display, preserving unrelated overrides, disconnect cleanup, refreshing a greeter without a desktop, preserving an active user desktop, and avoiding restarts during SDDM startup. [check-guard.py](files/check-guard.py) packages those cases and verifies bundle integrity without root or hardware access:
+
+```sh
+# From this post directory; no sudo and no live-system changes.
+python3 files/check-guard.py
+```
+
+Those fixture checks support the guard logic; they do not establish every possible physical hotplug scenario. Other ports, driver releases, exact retail models, physical dimensions, touch input rotation, suspend/resume and a second final-revision reboot remain unqualified.
+
+The migration's [saved local check report](evidence/validation.json) records the bundle/EDID verification and eight guard results. This is separate from the live-session evidence.
+
+### Wallpaper after the mode changes
+
+The selected wallpaper did not need replacing. Noctalia's renderer had lived through the geometry changes. Its `wallpaper.enabled` setting controls a loader that can recreate the background window. We temporarily set it false, allowed the external-settings reload to occur, then restored the original bytes. The same image and `fillMode: fit` were preserved, and the user confirmed the result.
+
+Do not change the user's image, crop mode, automation interval or performance profile to imitate this refresh. Do not describe a wholesale shell restart as the operation performed.
+
+## Rollback
+
+This removes only this post's named host files. Use the post directory containing the manifest. Leave unrelated settings and monitors alone. Removing the repair while this faulty panel is attached can restore the original black screen; retain SSH or another working display.
+
+```sh
+sudo systemctl stop waveshare-edid.service
+while IFS= read -r file; do
+    sudo rm -f "/$file"
+done < files/install-paths.txt
+sudo rm -f /etc/X11/xorg.conf.d/99-waveshare-edid.conf
+sudo systemctl daemon-reload
+sudo udevadm control --reload-rules
+
+# Reset only this connector's software override, then notify the compositor.
+sudo sh -c 'printf reset > /sys/kernel/debug/dri/0000:02:00.0/DP-2/edid_override'
+sudo sh -c 'printf "detect\n" > /sys/class/drm/card1-DP-2/status'
+sudo udevadm trigger --action=change /sys/class/drm/card1
+```
+
+Remove only the added WaveShare Niri block, then run `niri validate`. The original incident's backup is `~/.local/state/waveshare-display-repair/2026-10-30/display.kdl.before`; the human replay procedure creates `display.kdl.before-waveshare` before its own append. Do not restore an old whole-file backup over subsequent unrelated user edits.
+
+The service, drop-ins and udev rule are removed by the manifest loop. There is no separately enabled helper timer to disable. The temporary experiment's rollback timer was stopped and did not survive reboot. The initial `/tmp/waveshare-display-diagnostic-20261030` was cleared by reboot; do not depend on it for recovery. Raw/fixed EDIDs, initial/final helper sources and evidence remain in this post.
+
+The removal commands are documented rollback steps, not a rollback executed on the repaired host.
+
+## Sources and provenance
+
+- [NVIDIA 580-series X configuration options](https://download.nvidia.com/XFree86/Linux-x86_64/580.95.05/README/xconfigoptions.html): `CustomEDID`, validation and debug options. The host's installed 580.178.04 documentation/source was also inspected.
+- [Linux DRM connector definition](https://github.com/torvalds/linux/blob/master/include/drm/drm_connector.h) and [debugfs implementation](https://github.com/torvalds/linux/blob/master/drivers/gpu/drm/drm_debugfs.c): connector EDID override mechanism.
+- Host source `/usr/src/nvidia-580.178.04/kernel-open/nvidia-drm/nvidia-drm-connector.c`: verified the actual installed driver's override handling.
+- Host Niri CLI help: modeline syntax and transform values. Installed source/CLI took precedence over unrelated current web documentation.
+- Installed Noctalia QML: `Modules/Background/Background.qml`, `Commons/Settings.qml`, and `Services/UI/WallpaperService.qml`. These established the renderer reload behavior and why setting the same wallpaper path would be a no-op.
+- [Session evidence](evidence/session.json), [original maintenance notes](evidence/maintenance-notes.md), and [copy provenance](evidence/provenance.json). The original records remain in the source repository; this post is the organized troubleshooting write-up.
+
+This documentation task did not apply another change to the live host. Changes made specifically for the repo are organization, prose, templates, copied deployed artifacts, and the local-only verification harness.
+
+## Privacy treatment
+
+The public evidence replaces the personal hostname, login name, home path, actual boot UUIDs and incidental process/session identifiers. It omits unrelated repository names and machine inventory that did not explain the display failure. Dates and relevant event ordering remain useful troubleshooting context. These files are explicitly redacted derivatives, not byte-identical raw host captures.
+
+The EDID binaries and installed source remain byte-identical because the diagnosis and guard depend on their bytes. The EDID serial is the known dummy value 1, not an actual unique screen serial. PCI location, port and DDC labels remain as the exact tested profile; they are necessary to understand the helper's limits. Do not replace them with vague placeholders inside runnable code and silently claim it still matches the deployed version.
+
+No credentials or Xauthority cookie contents are included. Hardware models would be appropriate in a post whose diagnosis depended on them; an incidental inventory is not required by this post format.

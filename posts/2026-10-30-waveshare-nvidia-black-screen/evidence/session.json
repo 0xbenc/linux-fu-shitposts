@@ -1,0 +1,421 @@
+{
+  "host": "example-workstation",
+  "observed_at": "2026-10-30T20:38:44.353575-07:00",
+  "cause_evidence": [
+    "[  1018.067] (WW) NVIDIA(GPU-0): The EDID read for display device DP-2 is invalid:",
+    "[  1018.067] (WW) NVIDIA(GPU-0): - The EDID has a bad detailed timing descriptor."
+  ],
+  "installed": {
+    "/usr/local/libexec/waveshare-edid-prepare.py": {
+      "sha256": "6d9f82a15416219a05e825f01e9bb544088b4a7442b4dc780cfda203fcef5abd",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o755",
+      "content": "#!/usr/bin/python3\n\"\"\"Repair only the observed malformed WaveShare EDID on this GPU's DP-2.\"\"\"\nfrom pathlib import Path\nimport ctypes,fcntl,hashlib,os,subprocess,time,tempfile\nDATA=Path('/usr/local/share/waveshare-display')\nRAW_HASH='32e8ad5ca55f0133ec2d758a9937ab417d98c179681399ec45860d9633c3f70e'\nFIXED_HASH='3a5552c40b66dad2b09603a4178fe89da92bb0f70b3051ed3921b0f5e3931e5f'\nGPU='0000:02:00.0'\nXORG_CONFIG=Path('/etc/X11/xorg.conf.d/99-waveshare-edid.conf')\nXORG_CONTENT='# Generated for the verified malformed WaveShare EDID.\\nSection \"OutputClass\"\\n    Identifier \"waveshare-known-edid\"\\n    MatchDriver \"nvidia-drm\"\\n    Option \"CustomEDID\" \"DFP-2:/usr/local/share/waveshare-display/edid-fixed.bin\"\\nEndSection\\n'\ndef prepare_xorg(match):\n    existing=XORG_CONFIG.read_text() if XORG_CONFIG.exists() else None\n    if match:\n        if existing==XORG_CONTENT: return False\n        if existing is not None: raise RuntimeError('Refusing to replace an unrelated Xorg config')\n        fd,name=tempfile.mkstemp(prefix='.waveshare-edid-',dir=XORG_CONFIG.parent)\n        try:\n            with os.fdopen(fd,'w') as f: f.write(XORG_CONTENT)\n            os.chmod(name,0o644);os.replace(name,XORG_CONFIG)\n        finally:\n            if os.path.exists(name): os.unlink(name)\n        return True\n    if existing==XORG_CONTENT:\n        XORG_CONFIG.unlink();return True\n    return False\ndef refresh_greeter(config_changed):\n    if not config_changed: return\n    state=subprocess.run(['systemctl','is-active','sddm'],capture_output=True,text=True)\n    if state.stdout.strip()!='active': return\n    sessions=subprocess.run(['loginctl','list-sessions','--no-legend'],capture_output=True,text=True,check=True).stdout\n    desktop=any(len(cols:=line.split())>3 and cols[3]=='seat0' and cols[2]!='sddm' for line in sessions.splitlines())\n    if not desktop:\n        subprocess.run(['systemctl','--no-block','try-restart','sddm'],check=True)\n\nclass Msg(ctypes.Structure):\n    _fields_=[('addr',ctypes.c_ushort),('flags',ctypes.c_ushort),('length',ctypes.c_ushort),('buf',ctypes.c_void_p)]\nclass Rdwr(ctypes.Structure):\n    _fields_=[('msgs',ctypes.POINTER(Msg)),('nmsgs',ctypes.c_uint)]\ndef read_edid(bus):\n    fd=os.open('/dev/'+bus.name,os.O_RDWR)\n    try:\n        blocks=[]\n        for off in (0,128):\n            offset=(ctypes.c_ubyte*1)(off);buf=(ctypes.c_ubyte*128)()\n            msgs=(Msg*2)(Msg(0x50,0,1,ctypes.addressof(offset)),Msg(0x50,1,128,ctypes.addressof(buf)))\n            fcntl.ioctl(fd,0x0707,Rdwr(msgs,2));blocks.append(bytes(buf))\n        return b''.join(blocks)\n    finally: os.close(fd)\ndef find_connector():\n    for p in Path('/sys/class/drm').glob('card*-DP-2'):\n        if (p.resolve().parent/'device').resolve().name==GPU: return p\n    return None\ndef main():\n    lock=open('/run/lock/waveshare-edid.lock','a')\n    try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)\n    except BlockingIOError: return\n    fixed=(DATA/'edid-fixed.bin').read_bytes()\n    if hashlib.sha256(fixed).hexdigest()!=FIXED_HASH: raise RuntimeError('Corrected EDID file changed')\n    subprocess.run(['modprobe','-q','i2c-dev'],check=True)\n    conn=None\n    for attempt in range(20):\n        conn=find_connector()\n        if conn is not None: break\n        time.sleep(.1)\n    if conn is None:\n        print('WaveShare: expected GPU connector absent; no changes');return\n    override=Path('/sys/kernel/debug/dri')/GPU/'DP-2'/'edid_override'\n    previous=override.read_bytes() if override.exists() else b''\n    match=False\n    if (conn/'status').read_text().strip()=='connected':\n        for bus in Path('/sys/bus/i2c/devices').glob('i2c-*'):\n            if bus.resolve().parent.name!=GPU: continue\n            if (bus/'name').read_text().strip()!='NVIDIA i2c adapter 4 at 2:00.0': continue\n            try: match=hashlib.sha256(read_edid(bus)).hexdigest()==RAW_HASH\n            except OSError as exc: print('WaveShare DDC read:',exc)\n            break\n    config_changed=prepare_xorg(match)\n    changed=False\n    if match:\n        if not override.exists(): raise RuntimeError('DRM EDID override interface unavailable')\n        if previous!=fixed or (conn/'edid').read_bytes()!=fixed:\n            override.write_bytes(fixed);changed=True\n        print('WaveShare matched: corrected EDID '+('applied' if changed else 'already active'))\n    elif previous==fixed:\n        override.write_bytes(b'reset');changed=True\n        print('Different/absent monitor: WaveShare override removed')\n    else: print('Different/absent monitor: normal EDID settings retained')\n    if changed:\n        (conn/'status').write_text('detect\\n')\n        card=conn.resolve().parent\n        subprocess.run(['udevadm','trigger','--action=change',str(card)],check=True)\n    refresh_greeter(config_changed)\nif __name__=='__main__': main()\n"
+    },
+    "/usr/local/libexec/waveshare-greeter-setup": {
+      "sha256": "8944978739d9e4450abb341b1e7b153e4b2d3c24f83229c9339d2ad37458464b",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o755",
+      "content": "#!/usr/bin/python3\n\"\"\"Preserve SDDM setup; orient only this corrected WaveShare display.\"\"\"\nfrom pathlib import Path\nimport hashlib,subprocess\nsubprocess.run(['/usr/share/sddm/scripts/Xsetup'],check=False)\nfixed=Path('/usr/local/share/waveshare-display/edid-fixed.bin').read_bytes()\nfor conn in Path('/sys/class/drm').glob('card*-DP-2'):\n    if (conn.resolve().parent/'device').resolve().name!='0000:02:00.0': continue\n    if (conn/'status').read_text().strip()=='connected' and (conn/'edid').read_bytes()==fixed:\n        subprocess.run(['xrandr','--output','DP-2','--primary','--mode','1080x1920','--rotate','right'],check=False)\n"
+    },
+    "/usr/local/share/waveshare-display/edid-raw.bin": {
+      "sha256": "32e8ad5ca55f0133ec2d758a9937ab417d98c179681399ec45860d9633c3f70e",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "hex": "00ffffffffffff0021f44c4f010000001f1d0104c58b4e783af065985751912721505400000001010101010101010101010101010101983a38a04080347070100a0872105300001e000000fc005761766553686172650a2020204f0000000a0000000d000000200000002000000000000000000000000000000000000000017c0203147147000000000000002309070183010000023a801871382d40582c450072105300001e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d1"
+    },
+    "/usr/local/share/waveshare-display/edid-fixed.bin": {
+      "sha256": "3a5552c40b66dad2b09603a4178fe89da92bb0f70b3051ed3921b0f5e3931e5f",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "hex": "00ffffffffffff0021f44c4f010000001f1d0104c58b4e783af065985751912721505400000001010101010101010101010101010101983a38a04080347070100a0872105300001e000000fc005761766553686172650a20202000000010000000000000000000000000000000000010000000000000000000000000000001020203147147000000000000002309070183010000023a801871382d40582c450072105300001e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d1"
+    },
+    "/etc/systemd/system/waveshare-edid.service": {
+      "sha256": "c48a32d9cf55b0e089502f31883e925338aef575daedf1b70c1a140113dea2f1",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "content": "[Unit]\nDescription=Repair the known WaveShare EDID on NVIDIA DP-2\nAfter=systemd-modules-load.service\nBefore=display-manager.service\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/python3 /usr/local/libexec/waveshare-edid-prepare.py\nTimeoutStartSec=15\n"
+    },
+    "/etc/systemd/system/sddm.service.d/30-waveshare-edid.conf": {
+      "sha256": "287a86b9b5c98d4e5bf63bb5f65a622d402523d2966a0b456ccb9eb9733e1b53",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "content": "[Unit]\nWants=waveshare-edid.service\nAfter=waveshare-edid.service\n"
+    },
+    "/etc/udev/rules.d/90-waveshare-edid.rules": {
+      "sha256": "1b8ecd969192209a69bd206e256a874ec6dfb19a2dde04364162294b21449a88",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "content": "# Recheck monitor identity on DRM hotplug; the service changes only its matching EDID.\nACTION==\"change\", SUBSYSTEM==\"drm\", KERNEL==\"card[0-9]*\", RUN+=\"/usr/bin/systemctl --no-block start waveshare-edid.service\"\n"
+    },
+    "/etc/sddm.conf.d/30-waveshare-edid.conf": {
+      "sha256": "962b311b35cb46a884cbdb9b1187708a603a95826c906a73bde2ef6cf559e1d1",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "content": "[X11]\nDisplayCommand=/usr/local/libexec/waveshare-greeter-setup\n"
+    },
+    "/etc/X11/xorg.conf.d/99-waveshare-edid.conf": {
+      "sha256": "1861c9f149cb0f0a037f9fbdc28f53cc69bf2982b726ff25de620fa45c7a03c6",
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "content": "# Generated for the verified malformed WaveShare EDID.\nSection \"OutputClass\"\n    Identifier \"waveshare-known-edid\"\n    MatchDriver \"nvidia-drm\"\n    Option \"CustomEDID\" \"DFP-2:/usr/local/share/waveshare-display/edid-fixed.bin\"\nEndSection\n"
+    }
+  },
+  "kernel_edid_sha256": "3a5552c40b66dad2b09603a4178fe89da92bb0f70b3051ed3921b0f5e3931e5f",
+  "current_outputs": {
+    "DP-2": {
+      "name": "DP-2",
+      "make": "Unknown",
+      "model": "Unknown",
+      "serial": null,
+      "physical_size": [
+        1390,
+        780
+      ],
+      "modes": [
+        {
+          "width": 1080,
+          "height": 1920,
+          "refresh_rate": 61343,
+          "is_preferred": true
+        },
+        {
+          "width": 1920,
+          "height": 1080,
+          "refresh_rate": 60000,
+          "is_preferred": false
+        }
+      ],
+      "current_mode": 0,
+      "is_custom_mode": false,
+      "vrr_supported": false,
+      "vrr_enabled": false,
+      "logical": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080,
+        "scale": 1.0,
+        "transform": "270"
+      }
+    }
+  },
+  "niri_display_config": {
+    "before_sha256": "939c346e35cc3e7908c8667b8fcb399184bc33e530fb6b120a6c2debfe735f3a",
+    "after_sha256": "eacb9889b54537a2b21b6cb9e6dc56c20fa936f790c7e766080e218910169c81",
+    "appended": "\n// WaveShare portrait-native panel: corrected EDID is prepared before SDDM.\noutput \"PNP(HOT) WaveShare 0x00000001\" {\n    mode \"1080x1920@61.343\"\n    scale 1\n    transform \"270\"\n}\n",
+    "original_prefix_preserved": true
+  },
+  "guard_checks": [
+    {
+      "case": "known-screen-apply",
+      "passed": true
+    },
+    {
+      "case": "known-screen-idempotent",
+      "passed": true
+    },
+    {
+      "case": "different-screen-clear-own-overrides",
+      "passed": true
+    },
+    {
+      "case": "different-screen-preserve-unrelated-overrides",
+      "passed": true
+    },
+    {
+      "case": "unplugged-screen-clear-own-overrides",
+      "passed": true
+    },
+    {
+      "case": "greeter-refresh-when-no-desktop",
+      "passed": true
+    },
+    {
+      "case": "preserve-active-user-desktop",
+      "passed": true
+    },
+    {
+      "case": "no-restart-during-startup",
+      "passed": true
+    }
+  ],
+  "service_result": "Result=success\nExecMainStatus=0\n",
+  "display_manager_dependencies": "Wants=waveshare-edid.service\nAfter=systemd-user-sessions.service systemd-journald.socket sysinit.target waveshare-edid.service getty@tty1.service system.slice systemd-logind.service plymouth-quit.service basic.target\n",
+  "automatic_rollback_timer": "inactive",
+  "temporary_xorg_config_removed": true,
+  "wallpaper_refresh": {
+    "same_settings_bytes": true,
+    "preferences": {
+      "enabled": true,
+      "fillMode": "fit",
+      "automationEnabled": true
+    },
+    "human_review": "User confirmed: Yes, looks normal"
+  },
+  "human_review": {
+    "desktop_visible_after_kernel_override": true,
+    "rotation_270_confirmed_upright_and_stable": true,
+    "reboot_tested": true,
+    "future_greeter_orientation_tested": true
+  },
+  "remote_evidence_directory": "/tmp/waveshare-display-diagnostic-20261030",
+  "final_outputs": {
+    "DP-2": {
+      "name": "DP-2",
+      "make": "PNP(HOT)",
+      "model": "WaveShare",
+      "serial": "0x00000001",
+      "physical_size": [
+        1390,
+        780
+      ],
+      "modes": [
+        {
+          "width": 1080,
+          "height": 1920,
+          "refresh_rate": 61343,
+          "is_preferred": true
+        },
+        {
+          "width": 1920,
+          "height": 1080,
+          "refresh_rate": 60000,
+          "is_preferred": false
+        }
+      ],
+      "current_mode": 0,
+      "is_custom_mode": false,
+      "vrr_supported": false,
+      "vrr_enabled": false,
+      "logical": {
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 1080,
+        "scale": 1.0,
+        "transform": "270"
+      }
+    }
+  },
+  "initial_installation_artifacts": {
+    "/usr/local/libexec/waveshare-edid-prepare.py": {
+      "sha256": "b7c1ba2669cf46c935f1a612eb2a23e4c4e367e571af328d0c45f06679c63805",
+      "matches_staged_source": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o755",
+      "content": "#!/usr/bin/python3\n\"\"\"Repair only the observed malformed WaveShare EDID on this GPU's DP-2.\"\"\"\nfrom pathlib import Path\nimport ctypes,fcntl,hashlib,os,subprocess,time\nDATA=Path('/usr/local/share/waveshare-display')\nRAW_HASH='32e8ad5ca55f0133ec2d758a9937ab417d98c179681399ec45860d9633c3f70e'\nFIXED_HASH='3a5552c40b66dad2b09603a4178fe89da92bb0f70b3051ed3921b0f5e3931e5f'\nGPU='0000:02:00.0'\nclass Msg(ctypes.Structure):\n    _fields_=[('addr',ctypes.c_ushort),('flags',ctypes.c_ushort),('length',ctypes.c_ushort),('buf',ctypes.c_void_p)]\nclass Rdwr(ctypes.Structure):\n    _fields_=[('msgs',ctypes.POINTER(Msg)),('nmsgs',ctypes.c_uint)]\ndef read_edid(bus):\n    fd=os.open('/dev/'+bus.name,os.O_RDWR)\n    try:\n        blocks=[]\n        for off in (0,128):\n            offset=(ctypes.c_ubyte*1)(off);buf=(ctypes.c_ubyte*128)()\n            msgs=(Msg*2)(Msg(0x50,0,1,ctypes.addressof(offset)),Msg(0x50,1,128,ctypes.addressof(buf)))\n            fcntl.ioctl(fd,0x0707,Rdwr(msgs,2));blocks.append(bytes(buf))\n        return b''.join(blocks)\n    finally: os.close(fd)\ndef find_connector():\n    for p in Path('/sys/class/drm').glob('card*-DP-2'):\n        if (p.resolve().parent/'device').resolve().name==GPU: return p\n    return None\ndef main():\n    lock=open('/run/lock/waveshare-edid.lock','a')\n    try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)\n    except BlockingIOError: return\n    fixed=(DATA/'edid-fixed.bin').read_bytes()\n    if hashlib.sha256(fixed).hexdigest()!=FIXED_HASH: raise RuntimeError('Corrected EDID file changed')\n    subprocess.run(['modprobe','-q','i2c-dev'],check=True)\n    conn=None\n    for attempt in range(20):\n        conn=find_connector()\n        if conn is not None: break\n        time.sleep(.1)\n    if conn is None:\n        print('WaveShare: expected GPU connector absent; no changes');return\n    override=Path('/sys/kernel/debug/dri')/GPU/'DP-2'/'edid_override'\n    previous=override.read_bytes() if override.exists() else b''\n    match=False\n    if (conn/'status').read_text().strip()=='connected':\n        for bus in Path('/sys/bus/i2c/devices').glob('i2c-*'):\n            if bus.resolve().parent.name!=GPU: continue\n            if (bus/'name').read_text().strip()!='NVIDIA i2c adapter 4 at 2:00.0': continue\n            try: match=hashlib.sha256(read_edid(bus)).hexdigest()==RAW_HASH\n            except OSError as exc: print('WaveShare DDC read:',exc)\n            break\n    changed=False\n    if match:\n        if not override.exists(): raise RuntimeError('DRM EDID override interface unavailable')\n        if previous!=fixed or (conn/'edid').read_bytes()!=fixed:\n            override.write_bytes(fixed);changed=True\n        print('WaveShare matched: corrected EDID '+('applied' if changed else 'already active'))\n    elif previous==fixed:\n        override.write_bytes(b'reset');changed=True\n        print('Different/absent monitor: WaveShare override removed')\n    else: print('Different/absent monitor: normal EDID settings retained')\n    if changed:\n        (conn/'status').write_text('detect\\n')\n        card=conn.resolve().parent\n        subprocess.run(['udevadm','trigger','--action=change',str(card)],check=True)\nif __name__=='__main__': main()\n"
+    },
+    "/usr/local/libexec/waveshare-greeter-setup": {
+      "sha256": "8944978739d9e4450abb341b1e7b153e4b2d3c24f83229c9339d2ad37458464b",
+      "matches_staged_source": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o755",
+      "content": "#!/usr/bin/python3\n\"\"\"Preserve SDDM setup; orient only this corrected WaveShare display.\"\"\"\nfrom pathlib import Path\nimport hashlib,subprocess\nsubprocess.run(['/usr/share/sddm/scripts/Xsetup'],check=False)\nfixed=Path('/usr/local/share/waveshare-display/edid-fixed.bin').read_bytes()\nfor conn in Path('/sys/class/drm').glob('card*-DP-2'):\n    if (conn.resolve().parent/'device').resolve().name!='0000:02:00.0': continue\n    if (conn/'status').read_text().strip()=='connected' and (conn/'edid').read_bytes()==fixed:\n        subprocess.run(['xrandr','--output','DP-2','--primary','--mode','1080x1920','--rotate','right'],check=False)\n"
+    },
+    "/usr/local/share/waveshare-display/edid-raw.bin": {
+      "sha256": "32e8ad5ca55f0133ec2d758a9937ab417d98c179681399ec45860d9633c3f70e",
+      "matches_staged_source": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "hex": "00ffffffffffff0021f44c4f010000001f1d0104c58b4e783af065985751912721505400000001010101010101010101010101010101983a38a04080347070100a0872105300001e000000fc005761766553686172650a2020204f0000000a0000000d000000200000002000000000000000000000000000000000000000017c0203147147000000000000002309070183010000023a801871382d40582c450072105300001e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d1"
+    },
+    "/usr/local/share/waveshare-display/edid-fixed.bin": {
+      "sha256": "3a5552c40b66dad2b09603a4178fe89da92bb0f70b3051ed3921b0f5e3931e5f",
+      "matches_staged_source": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "hex": "00ffffffffffff0021f44c4f010000001f1d0104c58b4e783af065985751912721505400000001010101010101010101010101010101983a38a04080347070100a0872105300001e000000fc005761766553686172650a20202000000010000000000000000000000000000000000010000000000000000000000000000001020203147147000000000000002309070183010000023a801871382d40582c450072105300001e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000d1"
+    },
+    "/etc/systemd/system/waveshare-edid.service": {
+      "sha256": "c48a32d9cf55b0e089502f31883e925338aef575daedf1b70c1a140113dea2f1",
+      "matches_staged_source": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "content": "[Unit]\nDescription=Repair the known WaveShare EDID on NVIDIA DP-2\nAfter=systemd-modules-load.service\nBefore=display-manager.service\n\n[Service]\nType=oneshot\nExecStart=/usr/bin/python3 /usr/local/libexec/waveshare-edid-prepare.py\nTimeoutStartSec=15\n"
+    },
+    "/etc/systemd/system/sddm.service.d/30-waveshare-edid.conf": {
+      "sha256": "287a86b9b5c98d4e5bf63bb5f65a622d402523d2966a0b456ccb9eb9733e1b53",
+      "matches_staged_source": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "content": "[Unit]\nWants=waveshare-edid.service\nAfter=waveshare-edid.service\n"
+    },
+    "/etc/udev/rules.d/90-waveshare-edid.rules": {
+      "sha256": "1b8ecd969192209a69bd206e256a874ec6dfb19a2dde04364162294b21449a88",
+      "matches_staged_source": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "content": "# Recheck monitor identity on DRM hotplug; the service changes only its matching EDID.\nACTION==\"change\", SUBSYSTEM==\"drm\", KERNEL==\"card[0-9]*\", RUN+=\"/usr/bin/systemctl --no-block start waveshare-edid.service\"\n"
+    },
+    "/etc/sddm.conf.d/30-waveshare-edid.conf": {
+      "sha256": "962b311b35cb46a884cbdb9b1187708a603a95826c906a73bde2ef6cf559e1d1",
+      "matches_staged_source": true,
+      "uid": 0,
+      "gid": 0,
+      "mode": "0o644",
+      "content": "[X11]\nDisplayCommand=/usr/local/libexec/waveshare-greeter-setup\n"
+    }
+  },
+  "installation_revision": 2,
+  "guard_checks_initial": [
+    {
+      "case": "known-screen-apply",
+      "passed": true
+    },
+    {
+      "case": "known-screen-idempotent",
+      "passed": true
+    },
+    {
+      "case": "different-screen-clear-own-override",
+      "passed": true
+    },
+    {
+      "case": "different-screen-preserve-unrelated-override",
+      "passed": true
+    },
+    {
+      "case": "unplugged-screen-clear-own-override",
+      "passed": true
+    }
+  ],
+  "reboot_check": {
+    "observed_at": "2026-10-30T20:53:26.941490-07:00",
+    "initial_probe": {
+      "observed_at": "2026-10-30T20:49:34.716563-07:00",
+      "boot_id": "ANONYMIZED_BOOT_1",
+      "uptime": {
+        "returncode": 0,
+        "stdout": " 20:49:34 up 0 min,  1 user,  load average: 1.21, 0.31, 0.11\n",
+        "stderr": ""
+      },
+      "system_state": {
+        "returncode": 0,
+        "stdout": "running\n",
+        "stderr": ""
+      },
+      "failed_units": {
+        "returncode": 0,
+        "stdout": "  UNIT LOAD ACTIVE SUB DESCRIPTION\n\n0 loaded units listed.\n",
+        "stderr": ""
+      },
+      "repair_service": {
+        "returncode": 0,
+        "stdout": "Result=success\nExecMainStatus=0\n",
+        "stderr": ""
+      },
+      "repair_log": {
+        "returncode": 0,
+        "stdout": "Oct 30 20:49:12 example-workstation systemd[1]: Starting Repair the known WaveShare EDID on NVIDIA DP-2...\nOct 30 20:49:13 example-workstation python3[PID]: WaveShare matched: corrected EDID applied\nOct 30 20:49:13 example-workstation systemd[1]: waveshare-edid.service: Deactivated successfully.\nOct 30 20:49:13 example-workstation systemd[1]: Finished Repair the known WaveShare EDID on NVIDIA DP-2.\nOct 30 20:49:13 example-workstation systemd[1]: Starting Repair the known WaveShare EDID on NVIDIA DP-2...\nOct 30 20:49:13 example-workstation python3[PID]: WaveShare matched: corrected EDID already active\nOct 30 20:49:13 example-workstation systemd[1]: waveshare-edid.service: Deactivated successfully.\nOct 30 20:49:13 example-workstation systemd[1]: Finished Repair the known WaveShare EDID on NVIDIA DP-2.\nOct 30 20:49:14 example-workstation systemd[1]: Starting Repair the known WaveShare EDID on NVIDIA DP-2...\nOct 30 20:49:14 example-workstation python3[PID]: WaveShare matched: corrected EDID already active\nOct 30 20:49:14 example-workstation systemd[1]: waveshare-edid.service: Deactivated successfully.\nOct 30 20:49:14 example-workstation systemd[1]: Finished Repair the known WaveShare EDID on NVIDIA DP-2.\nOct 30 20:49:20 example-workstation systemd[1]: Starting Repair the known WaveShare EDID on NVIDIA DP-2...\nOct 30 20:49:20 example-workstation python3[PID]: WaveShare matched: corrected EDID already active\nOct 30 20:49:20 example-workstation systemd[1]: waveshare-edid.service: Deactivated successfully.\nOct 30 20:49:20 example-workstation systemd[1]: Finished Repair the known WaveShare EDID on NVIDIA DP-2.\n",
+        "stderr": ""
+      },
+      "display_manager": {
+        "returncode": 0,
+        "stdout": "active\n",
+        "stderr": ""
+      },
+      "sessions": {
+        "summary": "SDDM greeter active; no user desktop logged in at this checkpoint."
+      },
+      "connector": {
+        "status": "connected",
+        "edid_bytes": 256,
+        "edid_sha256": "3a5552c40b66dad2b09603a4178fe89da92bb0f70b3051ed3921b0f5e3931e5f",
+        "modes": [
+          "1080x1920",
+          "1920x1080"
+        ]
+      },
+      "xorg_orientation": [
+        "[    11.687] (II) NVIDIA(0): Virtual screen size determined to be 1024 x 768",
+        "[    13.523] (II) NVIDIA(0): Setting mode \"DFP-2:nvidia-auto-select\""
+      ]
+    },
+    "boot_id": "ANONYMIZED_BOOT_1",
+    "fresh_login_outputs": {
+      "DP-2": {
+        "name": "DP-2",
+        "make": "PNP(HOT)",
+        "model": "WaveShare",
+        "serial": "0x00000001",
+        "physical_size": [
+          1390,
+          780
+        ],
+        "modes": [
+          {
+            "width": 1080,
+            "height": 1920,
+            "refresh_rate": 61343,
+            "is_preferred": true
+          },
+          {
+            "width": 1920,
+            "height": 1080,
+            "refresh_rate": 60000,
+            "is_preferred": false
+          }
+        ],
+        "current_mode": 0,
+        "is_custom_mode": false,
+        "vrr_supported": false,
+        "vrr_enabled": false,
+        "logical": {
+          "x": 0,
+          "y": 0,
+          "width": 1920,
+          "height": 1080,
+          "scale": 1.0,
+          "transform": "270"
+        }
+      }
+    },
+    "xorg_mode_log": [
+      "[   136.556] (**) NVIDIA(0): Option \"CustomEDID\" \"DFP-2:/usr/local/share/waveshare-display/edid-fixed.bin\"",
+      "[   136.638] (II) NVIDIA(0): Virtual screen size determined to be 1080 x 1920",
+      "[   136.711] (II) NVIDIA(0): Setting mode \"DFP-2:nvidia-auto-select\"",
+      "[   136.923] (II) NVIDIA(0): Setting mode \"NULL\"",
+      "[   136.978] (II) NVIDIA(0): Setting mode \"DP-2: nvidia-auto-select @1920x1080 +0+0 {ViewPortIn=1920x1080, ViewPortOut=1080x1920+0+0, Rotation=270}\""
+    ],
+    "service_result": "Result=success\nExecMainStatus=0\n",
+    "human_confirmed_login_and_desktop_correct": true,
+    "final_revision_second_reboot_tested": false,
+    "correction": "Kernel override survived reboot; Xorg needed a generated, monitor-matched CustomEDID configuration too. Added it to the guard and refreshed only the greeter. User then signed in and confirmed both screens correct."
+  },
+  "remote_evidence_directory_survived_reboot": false,
+  "persistent_followup_evidence_directory": "$HOME/.local/state/waveshare-display-repair/2026-10-30",
+  "privacy": {
+    "anonymized": [
+      "hostname",
+      "login name",
+      "home path",
+      "boot UUIDs",
+      "process IDs and session listing"
+    ],
+    "kept": [
+      "public 0xbenc repository URLs",
+      "dates and times for chronology",
+      "hardware and software versions",
+      "PCI/connector/DDC identifiers required by this exact repair",
+      "EDID bytes, hashes, and known dummy serial 1"
+    ],
+    "note": "Redacted derivative of private session records. Bundled installed source and EDID bytes remain exact."
+  }
+}

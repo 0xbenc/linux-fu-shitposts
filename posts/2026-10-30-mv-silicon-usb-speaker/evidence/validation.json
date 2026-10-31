@@ -1,0 +1,63 @@
+{
+  "checked_on": "2026-10-30",
+  "command": "python3 files/check-behavior.py",
+  "result": {
+    "source_files_verified": 10,
+    "hardware_access": false,
+    "behavior_checks": [
+      {
+        "case": "plug-target-card-and-sink",
+        "passed": true
+      },
+      {
+        "case": "boot-without-user-sink-still-repairs-alsa",
+        "passed": true
+      },
+      {
+        "case": "unrelated-device-and-sink-untouched",
+        "passed": true
+      },
+      {
+        "case": "shared-config-overrides-defaults",
+        "passed": true
+      },
+      {
+        "case": "login-muted-is-repaired-even-same-boot",
+        "passed": true
+      },
+      {
+        "case": "login-zero-volume-is-repaired",
+        "passed": true
+      },
+      {
+        "case": "login-threshold-is-inclusive",
+        "passed": true
+      },
+      {
+        "case": "healthy-first-login-new-boot-gets-default",
+        "passed": true
+      },
+      {
+        "case": "healthy-same-boot-keeps-user-level",
+        "passed": true
+      },
+      {
+        "case": "missing-sink-does-not-mark-boot",
+        "passed": true
+      },
+      {
+        "case": "configured-threshold-preserves-higher-level",
+        "passed": true
+      },
+      {
+        "case": "configured-default-used-for-repair",
+        "passed": true
+      },
+      {
+        "case": "missing-pactl-exits-without-changes",
+        "passed": true
+      }
+    ]
+  },
+  "scope": "Local fixture/source checks only; no live host changes or new physical-device test."
+}

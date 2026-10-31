@@ -1,0 +1,8 @@
+usr/local/libexec/waveshare-edid-prepare.py
+usr/local/libexec/waveshare-greeter-setup
+usr/local/share/waveshare-display/edid-raw.bin
+usr/local/share/waveshare-display/edid-fixed.bin
+etc/systemd/system/waveshare-edid.service
+etc/systemd/system/sddm.service.d/30-waveshare-edid.conf
+etc/udev/rules.d/90-waveshare-edid.rules
+etc/sddm.conf.d/30-waveshare-edid.conf

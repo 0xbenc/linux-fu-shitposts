@@ -1,0 +1,43 @@
+{
+  "checked_on": "2026-10-30",
+  "command": "python3 files/check-guard.py",
+  "result": {
+    "bundle_files_verified": 9,
+    "edid_repair_verified": true,
+    "guard_checks": [
+      {
+        "case": "known-screen-apply",
+        "passed": true
+      },
+      {
+        "case": "known-screen-idempotent",
+        "passed": true
+      },
+      {
+        "case": "different-screen-clear-own-overrides",
+        "passed": true
+      },
+      {
+        "case": "different-screen-preserve-unrelated-overrides",
+        "passed": true
+      },
+      {
+        "case": "unplugged-screen-clear-own-overrides",
+        "passed": true
+      },
+      {
+        "case": "greeter-refresh-when-no-desktop",
+        "passed": true
+      },
+      {
+        "case": "preserve-active-user-desktop",
+        "passed": true
+      },
+      {
+        "case": "no-restart-during-startup",
+        "passed": true
+      }
+    ]
+  },
+  "scope": "Local fixture/source checks only; no live host changes or new physical-device test."
+}

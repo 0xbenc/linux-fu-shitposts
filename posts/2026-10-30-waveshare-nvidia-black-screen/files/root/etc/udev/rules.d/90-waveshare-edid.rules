@@ -1,0 +1,2 @@
+# Recheck monitor identity on DRM hotplug; the service changes only its matching EDID.
+ACTION=="change", SUBSYSTEM=="drm", KERNEL=="card[0-9]*", RUN+="/usr/bin/systemctl --no-block start waveshare-edid.service"

@@ -1,0 +1,7 @@
+[Unit]
+Description=Reset MV-SILICON USB Speaker (ALSA PCM 100%, PipeWire 40%)
+After=sound.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/reset-usb-speaker-audio.sh

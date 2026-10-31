@@ -1,0 +1,102 @@
+{
+  "source_url": "https://github.com/0xbenc/mv-silicon-8888-1719-usb-speaker-fix",
+  "source_commit": "c614350e1fab9ea508ef27b945703d0dcb83e6ca",
+  "captured_at": "2026-10-30T21:07:28.104506-07:00",
+  "source_history": [
+    {
+      "commit": "c614350e1fab9ea508ef27b945703d0dcb83e6ca",
+      "date": "2026-06-21T17:16:17-07:00",
+      "subject": "Add login-time PipeWire reset and shared config"
+    },
+    {
+      "commit": "70da79976f3c9766b12ad72ad6e61fad0f47ef23",
+      "date": "2026-06-16T17:19:25-07:00",
+      "subject": "Fix silent MV-SILICON USB Speaker (USB 8888:1719) on Linux/PipeWire"
+    },
+    {
+      "commit": "4ada76b0f66e45c3492172200a48b44c0a343883",
+      "date": "2026-06-16T17:15:45-07:00",
+      "subject": "Initial commit"
+    }
+  ],
+  "files": [
+    {
+      "path": "LICENSE",
+      "sha256": "d4ce5c3f291f78e23b651cb728e1342c3a59e6d044d088143722bfb7d738b78a",
+      "bytes": 1068,
+      "executable": false
+    },
+    {
+      "path": "README.md",
+      "sha256": "70865f9f831e4e07e98543dfdae7b0a101a03f0b0309b15ed7ae7226aea4c0e2",
+      "bytes": 7057,
+      "executable": false
+    },
+    {
+      "path": "bin/reset-usb-speaker-audio.sh",
+      "sha256": "94c1093fa9d89cb0a60c2a86bc97ff39330ebe23207c7af1a4d166f729b94e5d",
+      "bytes": 1941,
+      "executable": true
+    },
+    {
+      "path": "bin/reset-usb-speaker-pipewire-session.sh",
+      "sha256": "1ead31860f045715cb34381a3e0ad354b662042076878eb864489c56a3c6f48e",
+      "bytes": 2825,
+      "executable": true
+    },
+    {
+      "path": "etc/default/usb-speaker",
+      "sha256": "a11caae879b8b594b316c6381e4dfa64ef36f040ec9bc07c8eda77bb5499d9da",
+      "bytes": 816,
+      "executable": false
+    },
+    {
+      "path": "etc/systemd/system/reset-usb-speaker-pcm.service",
+      "sha256": "fe5d9b9ae7aebe3a7561b0868b5a05b25be04f9ed7333bffd75fc60a248663e2",
+      "bytes": 173,
+      "executable": false
+    },
+    {
+      "path": "etc/systemd/user/reset-usb-speaker-pipewire.service",
+      "sha256": "8bfe4e16016c2d52dec91b471874d9bc03bcdd3361bc97444d5b6c02776a1c95",
+      "bytes": 301,
+      "executable": false
+    },
+    {
+      "path": "etc/udev/rules.d/99-usb-speaker-pcm.rules",
+      "sha256": "f93295d370cfddd7b7f824b30f46a49e31c3b182bc933e15e824fd841c56891a",
+      "bytes": 325,
+      "executable": false
+    },
+    {
+      "path": "install.sh",
+      "sha256": "110d153747c90a65e45b5380709ad6d46a83b01532d20de11046b8c2930a1d5f",
+      "bytes": 1565,
+      "executable": true
+    },
+    {
+      "path": "uninstall.sh",
+      "sha256": "fc1b7d6f315df163892b1d98b6dfc890c8ac7e146d8959836b67e788d056ab30",
+      "bytes": 711,
+      "executable": true
+    }
+  ],
+  "migration_audit": {
+    "branches": [
+      "main"
+    ],
+    "commit_count": 3,
+    "issues": 0,
+    "pull_requests": 0,
+    "releases": 0,
+    "tags": 0,
+    "wiki": "Wiki enabled in repository settings, but its Git endpoint returned Repository not found; no accessible wiki found.",
+    "external_runtime_dependencies_on_original_repo": false
+  },
+  "privacy": {
+    "original_copyright_notice": "Retained unchanged at user request.",
+    "git_history": "Complete Git bundle verified and stored privately outside this publication tree; author identities/emails are not copied into the public history summary.",
+    "host_data": "No personal hostnames, home paths, audio-device serials or raw live-system logs were supplied by the source repo."
+  },
+  "validation_limit": "Migration reviewed and checked locally. No new physical speaker playback, replug, login or suspend/resume test was performed."
+}

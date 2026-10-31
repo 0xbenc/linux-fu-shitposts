@@ -1,0 +1,7 @@
+
+// WaveShare portrait-native panel: corrected EDID is prepared before SDDM.
+output "PNP(HOT) WaveShare 0x00000001" {
+    mode "1080x1920@61.343"
+    scale 1
+    transform "270"
+}

@@ -1,0 +1,3 @@
+# Reset the MV-SILICON USB Speaker (USB 8888:1719) on plug-in.
+# Matches only the control node so the service fires once, after the ALSA mixer exists.
+ACTION=="add", SUBSYSTEM=="sound", KERNEL=="controlC*", ATTRS{idVendor}=="8888", ATTRS{idProduct}=="1719", TAG+="systemd", ENV{SYSTEMD_WANTS}="reset-usb-speaker-pcm.service"

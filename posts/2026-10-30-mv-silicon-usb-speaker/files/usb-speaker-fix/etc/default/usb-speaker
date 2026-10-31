@@ -1,0 +1,18 @@
+# Configuration for the MV-SILICON USB Speaker fix (USB 8888:1719).
+# This is the single source of truth for both scripts. Edit values here, then
+# re-run the unit(s) -- the scripts read this file live, so no reinstall needed:
+#   sudo systemctl start reset-usb-speaker-pcm.service
+#   systemctl --user  start reset-usb-speaker-pipewire.service
+
+# ALSA hardware control (the actual silence fix). Keep at 100% unless you have a reason not to.
+PCM_VOLUME=100%
+
+# PipeWire sink level applied as the default (on plug-in, and once per boot at login).
+PW_VOLUME=40%
+
+# A sink that is muted or at/below this percent is treated as "broken" and repaired at login.
+LOW_VOLUME=5
+
+# Device identifiers -- normally no need to change.
+USB_ID="8888:1719"
+SINK_MATCH="MV-SILICON_USB_Speaker"   # substring of the PipeWire sink name
