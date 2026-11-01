@@ -1,0 +1,9 @@
+[Unit]
+Description=Repair the known WaveShare EDID on all four NVIDIA DisplayPort connectors
+After=systemd-modules-load.service
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/waveshare-edid-prepare.py
+TimeoutStartSec=15

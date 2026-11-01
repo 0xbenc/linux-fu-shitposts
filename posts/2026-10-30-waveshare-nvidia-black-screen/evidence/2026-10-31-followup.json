@@ -1,0 +1,108 @@
+{
+  "privacy": "Selected, redacted host observations; not a byte-identical raw capture. Host/user/session identifiers and unrelated inventory omitted.",
+  "date": "2026-10-31T19:37:57-07:00",
+  "distribution": "CachyOS",
+  "kernel": "7.2.8-1-cachyos",
+  "nvidia": "580.178.04",
+  "initial_failure": {
+    "connected_kernel_port": "DP-1",
+    "xorg_output": "DP-0",
+    "mode": "1024x768",
+    "edid_bytes": 0,
+    "original_helper_port": "DP-2",
+    "raw_ddc_adapter": "NVIDIA i2c adapter 3 at 2:00.0",
+    "raw_edid_sha256": "32e8ad5ca55f0133ec2d758a9937ab417d98c179681399ec45860d9633c3f70e"
+  },
+  "connectors": {
+    "card1-DP-1": {
+      "status": "connected",
+      "edid_bytes": 256,
+      "edid_sha256": "3a5552c40b66dad2b09603a4178fe89da92bb0f70b3051ed3921b0f5e3931e5f"
+    },
+    "card1-DP-2": {
+      "status": "disconnected",
+      "edid_bytes": 0,
+      "edid_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "card1-DP-3": {
+      "status": "disconnected",
+      "edid_bytes": 0,
+      "edid_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "card1-DP-4": {
+      "status": "disconnected",
+      "edid_bytes": 0,
+      "edid_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "xrandr_selected_lines": [
+    "Screen 0: minimum 8 x 8, current 1920 x 1080, maximum 32767 x 32767",
+    "DP-0 connected primary 1920x1080+0+0 right (normal left inverted right x axis y axis) 1394mm x 784mm",
+    "   1080x1920     61.34*+"
+  ],
+  "installed_sha256": {
+    "/usr/local/libexec/waveshare-edid-prepare.py": "1c0b4619bb1d4bedb3b630cfa8a860bc300363eb18dba8a8ea0913af25634977",
+    "/usr/local/libexec/waveshare-greeter-setup": "1fb720a45df7d260c27b077a8c871da47b8756eec7c1b48e71c34594fce70f17",
+    "/etc/systemd/system/waveshare-edid.service": "810c17a89ed9047598424e0a3c02d063ae018fb6b652034c58cdbed74bc96cd2"
+  },
+  "service": [
+    "Result=success",
+    "ExecMainStatus=0"
+  ],
+  "sddm_state": "active",
+  "generated_xorg": "# Generated for the verified malformed WaveShare EDID.\nSection \"OutputClass\"\n    Identifier \"waveshare-known-edid\"\n    MatchDriver \"nvidia-drm\"\n    Option \"CustomEDID\" \"DFP-0:/usr/local/share/waveshare-display/edid-fixed.bin\"\nEndSection\n",
+  "final_greeter_setup_exit": 0,
+  "user_visual_confirmation": {
+    "date": "2026-11-01",
+    "source": "User reply to whether the login screen was visible after installing the all-port revision.",
+    "reply": "yes I can.",
+    "scope": "Login screen visible on the current DP-1 connection; no additional port, reboot or desktop-login validation claimed."
+  },
+  "final_revision_reboot_tested": false,
+  "physical_test_coverage": {
+    "DP-1": "Mode and EDID verified remotely on 2026-10-31; user confirmed the login screen visible on 2026-11-01.",
+    "DP-2": "2026-10-30 historical physical confirmation; final all-port revision not physically retested.",
+    "DP-3": "Mapping derived from driver metadata; no physical test.",
+    "DP-4": "Mapping derived from driver metadata; no physical test."
+  },
+  "mapping": [
+    {
+      "kernel_port": "DP-1",
+      "xorg_output": "DP-0",
+      "xorg_device": "DFP-0",
+      "physical_connector_index": 3,
+      "rm_display_mask": "0x100",
+      "rm_ddc_port": 4,
+      "linux_ddc_adapter_label": "NVIDIA i2c adapter 3 at 2:00.0"
+    },
+    {
+      "kernel_port": "DP-2",
+      "xorg_output": "DP-2",
+      "xorg_device": "DFP-2",
+      "physical_connector_index": 2,
+      "rm_display_mask": "0x400",
+      "rm_ddc_port": 5,
+      "linux_ddc_adapter_label": "NVIDIA i2c adapter 4 at 2:00.0"
+    },
+    {
+      "kernel_port": "DP-3",
+      "xorg_output": "DP-4",
+      "xorg_device": "DFP-4",
+      "physical_connector_index": 0,
+      "rm_display_mask": "0x1000",
+      "rm_ddc_port": 6,
+      "linux_ddc_adapter_label": "NVIDIA i2c adapter 5 at 2:00.0"
+    },
+    {
+      "kernel_port": "DP-4",
+      "xorg_output": "DP-6",
+      "xorg_device": "DFP-6",
+      "physical_connector_index": 1,
+      "rm_display_mask": "0x4000",
+      "rm_ddc_port": 7,
+      "linux_ddc_adapter_label": "NVIDIA i2c adapter 6 at 2:00.0"
+    }
+  ],
+  "mapping_basis": "NVIDIA RM GET_SUPPORTED / GET_I2C_PORTID / GET_CONNECTOR_DATA, Xorg nvidia-settings dpys enumeration, installed DRM connector creation source. osapi.c converts RM ddcPortId to Linux adapter label with ddcPortId - 1. DP-3/DP-4 mapping lacks physical panel testing.",
+  "host_unit_verify": "systemd-analyze verify /etc/systemd/system/waveshare-edid.service exited 0 without diagnostics over normal SSH."
+}

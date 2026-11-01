@@ -1,0 +1,11 @@
+#!/usr/bin/python3
+"""Preserve SDDM setup; orient only this corrected WaveShare display."""
+from pathlib import Path
+import subprocess
+subprocess.run(['/usr/share/sddm/scripts/Xsetup'],check=False)
+fixed=Path('/usr/local/share/waveshare-display/edid-fixed.bin').read_bytes()
+for port,output in (('DP-1','DP-0'),('DP-2','DP-2'),('DP-3','DP-4'),('DP-4','DP-6')):
+    for conn in Path('/sys/class/drm').glob('card*-'+port):
+        if (conn.resolve().parent/'device').resolve().name!='0000:02:00.0': continue
+        if (conn/'status').read_text().strip()=='connected' and (conn/'edid').read_bytes()==fixed:
+            subprocess.run(['xrandr','--output',output,'--primary','--mode','1080x1920','--rotate','right'],check=True)

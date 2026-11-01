@@ -1,0 +1,3 @@
+usr/local/libexec/waveshare-edid-prepare.py
+usr/local/libexec/waveshare-greeter-setup
+etc/systemd/system/waveshare-edid.service

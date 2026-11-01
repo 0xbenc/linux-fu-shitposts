@@ -1,0 +1,117 @@
+{
+  "historical_bundle_files_verified": 9,
+  "current_overlay_files_verified": 3,
+  "edid_repair_verified": true,
+  "guard_checks": [
+    {
+      "case": "DP-1-known-screen-apply",
+      "passed": true
+    },
+    {
+      "case": "DP-1-known-screen-idempotent",
+      "passed": true
+    },
+    {
+      "case": "DP-1-different-screen-clear-own-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-1-different-screen-preserve-unrelated-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-1-unplugged-screen-clear-own-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-2-known-screen-apply",
+      "passed": true
+    },
+    {
+      "case": "DP-2-known-screen-idempotent",
+      "passed": true
+    },
+    {
+      "case": "DP-2-different-screen-clear-own-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-2-different-screen-preserve-unrelated-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-2-unplugged-screen-clear-own-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-3-known-screen-apply",
+      "passed": true
+    },
+    {
+      "case": "DP-3-known-screen-idempotent",
+      "passed": true
+    },
+    {
+      "case": "DP-3-different-screen-clear-own-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-3-different-screen-preserve-unrelated-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-3-unplugged-screen-clear-own-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-4-known-screen-apply",
+      "passed": true
+    },
+    {
+      "case": "DP-4-known-screen-idempotent",
+      "passed": true
+    },
+    {
+      "case": "DP-4-different-screen-clear-own-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-4-different-screen-preserve-unrelated-overrides",
+      "passed": true
+    },
+    {
+      "case": "DP-4-unplugged-screen-clear-own-overrides",
+      "passed": true
+    },
+    {
+      "case": "greeter-refresh-when-no-desktop",
+      "passed": true
+    },
+    {
+      "case": "preserve-active-user-desktop",
+      "passed": true
+    },
+    {
+      "case": "no-restart-during-startup",
+      "passed": true
+    },
+    {
+      "case": "move-DP-1-to-DP-3-with-other-monitors",
+      "passed": true
+    },
+    {
+      "case": "ddc-failure-preserves-current-configuration",
+      "passed": true
+    }
+  ],
+  "repository_checks": {
+    "local_markdown_paths_checked": 51,
+    "embedded_python_snippets_parsed": 3,
+    "shell_blocks_parsed": 10,
+    "bundled_python_syntax": "passed",
+    "git_diff_check": "passed",
+    "rechecked_date": "2026-11-01",
+    "markdown_fragment_targets": "passed",
+    "install_manifest_inputs": "passed"
+  }
+}
