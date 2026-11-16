@@ -1,0 +1,4 @@
+# Keep script checksums stable across Windows and Linux checkouts.
+* text eol=lf
+# Preserve the original diagnostic log's bytes, including CRLF endings.
+evidence/service-startup-failure.txt -text whitespace=cr-at-eol

@@ -9,8 +9,9 @@ Every post has two versions:
 
 ## Posts
 
-| Date | Post | Tested Linux setup | Human version | AI context dump |
+| Date | Post | Tested setup | Human version | AI context dump |
 | --- | --- | --- | --- | --- |
+| 2026-11-16 | SSH straight into Windows, leave WSL on port 22 | Windows 10 · PowerShell · Ubuntu WSL | [Set it up](posts/2026-11-16-windows-ssh-alongside-wsl/human.md) | [Everything](posts/2026-11-16-windows-ssh-alongside-wsl/ai-context.md) |
 | 2026-10-30 | WaveShare works during boot, goes black in Linux | CachyOS · NVIDIA · SDDM/Niri | [Fix it](posts/2026-10-30-waveshare-nvidia-black-screen/human.md) | [Everything](posts/2026-10-30-waveshare-nvidia-black-screen/ai-context.md) |
 | 2026-10-30 | MV-SILICON USB speaker is detected, but silent | Original: Pop!_OS/Ubuntu · PipeWire | [Fix it](posts/2026-10-30-mv-silicon-usb-speaker/human.md) | [Everything](posts/2026-10-30-mv-silicon-usb-speaker/ai-context.md) |
 

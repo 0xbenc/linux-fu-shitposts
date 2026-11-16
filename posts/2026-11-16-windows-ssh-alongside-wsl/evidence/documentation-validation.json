@@ -1,0 +1,30 @@
+{
+  "checked_on": "2026-11-16",
+  "scope": "Later documentation checks; not a fresh-server installation or live rollback",
+  "result": "passed",
+  "powershell_scripts_parsed": 2,
+  "powershell_documentation_blocks_parsed": 14,
+  "isolated_acl_targets_checked": 2,
+  "live_acl_changes": false,
+  "live_server_changes": false,
+  "shell_blocks_syntax_checked_with_wsl_sh": 3,
+  "repository_local_markdown_links_and_anchors_checked": 71,
+  "new_post_files_scanned_for_incident_identifiers_keys_and_whitespace": 9,
+  "json_parse_checks": "passed",
+  "static_review": [
+    "Sensitive-file selection includes administrator authorized keys and host private keys",
+    "ACL repair occurs before starting sshd",
+    "Fresh-server guard rejects existing server directory and running service",
+    "Script does not read a client private key or include any key material",
+    "Firewall is TCP/2222, Private profile, and restricted to sshd.exe",
+    "Documentation distinguishes same-host and WSL tests from another physical device",
+    "Replay and rollback are not represented as executed on the working server",
+    "Scoped Git attributes preserve script line endings and original diagnostic log bytes across checkouts"
+  ],
+  "live_server_reinstalled_or_restarted_for_documentation": false,
+  "setup_script_sha256": "b2100f10cf223a631505b73707286ec270319bb5c7d360746e3f260a7b1cd982",
+  "failure_log_sha256": "429fff29a09af4d679cb5f7d2038298fd8aa8a411b89346464ef874a937789af",
+  "limits": [
+    "Parser and isolated ACL checks do not validate feature installation, actual ACL application, service startup or remote network access on another machine."
+  ]
+}

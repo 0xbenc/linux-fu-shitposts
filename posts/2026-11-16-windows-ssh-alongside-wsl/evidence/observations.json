@@ -1,0 +1,106 @@
+{
+  "incident_date": "2026-11-16",
+  "record_type": "Curated, depersonalized derivative of source-session tool results and local logs",
+  "not_a_raw_session_capture": true,
+  "environment": {
+    "windows": "Windows 10 22H2, build 19045",
+    "windows_powershell": "5.1.19041.6456",
+    "sshd_file_version": "9.5.4.1",
+    "sshd_product_version": "OpenSSH_9.5p1 for Windows",
+    "wsl_distribution": "Ubuntu; exact release not collected",
+    "active_network_profiles": {
+      "wifi": "Private",
+      "tailscale": "Private"
+    }
+  },
+  "initial_state": {
+    "windows_ssh_client_present": true,
+    "windows_sshd_service_present": false,
+    "port_22_loopback_owner": "wslrelay.exe",
+    "port_22_loopback_addresses": ["127.0.0.1", "::1"],
+    "netsh_portproxy_output": "No entries returned",
+    "existing_wsl_authorized_client_key_type": "ssh-ed25519",
+    "matching_client_private_key_already_present_on_windows": true,
+    "unelevated_capability_query": "The requested operation requires elevation."
+  },
+  "installation": {
+    "capability": "OpenSSH.Server~~~~0.0.1.0",
+    "restart_needed_reported": false,
+    "configuration_syntax_check": "sshd -t completed without reported configuration errors",
+    "first_service_start": "Failed; service exit code 1067",
+    "repeated_service_start": "Failed",
+    "openssh_event_channels": "Enabled, zero records at diagnostic check",
+    "foreground_elevated_debug_server": "Listened on IPv4 and IPv6 port 2222; then stopped",
+    "service_file_log": "Host private keys rejected as too broadly accessible; no hostkeys available",
+    "failure_log_file": "service-startup-failure.txt",
+    "repair": {
+      "targets": ["ssh_host_rsa_key", "ssh_host_ecdsa_key", "ssh_host_ed25519_key"],
+      "owner_sid": "S-1-5-32-544",
+      "inheritance": "Disabled",
+      "explicit_full_control_sids": ["S-1-5-32-544", "S-1-5-18"],
+      "private_key_contents_changed": false
+    }
+  },
+  "final_state": {
+    "sshd_state": "Running",
+    "sshd_start_mode": "Auto",
+    "sshd_account": "LocalSystem",
+    "sshd_binary": "%WINDIR%\\System32\\OpenSSH\\sshd.exe",
+    "temporary_service_logging_argument_removed": true,
+    "port": 2222,
+    "listen_addresses": ["0.0.0.0", "::"],
+    "allowed_account": "One existing local Windows administrator; actual name omitted",
+    "password_authentication": false,
+    "keyboard_interactive_authentication": false,
+    "authorized_keys_path": "%ProgramData%\\ssh\\administrators_authorized_keys",
+    "default_shell": "%WINDIR%\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "new_firewall_rule": {
+      "name": "Windows-SSH-2222-Private",
+      "enabled": true,
+      "profile": "Private",
+      "direction": "Inbound",
+      "action": "Allow",
+      "protocol": "TCP",
+      "port": 2222,
+      "program": "%WINDIR%\\System32\\OpenSSH\\sshd.exe"
+    },
+    "default_openssh_port_22_rule": "Disabled",
+    "wsl_ssh_configuration_edited": false,
+    "wsl_port_22_loopback_listeners_still_observed": true
+  },
+  "login_checks": [
+    {
+      "source": "Native Windows SSH client on server machine",
+      "destination": "127.0.0.1:2222",
+      "result": "Public-key login succeeded",
+      "outputs": ["Expected Windows machine/account (redacted)", "5.1.19041.6456", "Windows_NT"]
+    },
+    {
+      "source": "Native Windows SSH client on server machine",
+      "destination": "Same machine's Tailscale IP:2222 (address omitted)",
+      "result": "Public-key login succeeded; expected Windows identity",
+      "separate_tailnet_peer_test": false
+    },
+    {
+      "source": "Ubuntu WSL SSH client on server machine",
+      "destination": "Windows machine's LAN IP:2222 (address omitted)",
+      "result": "Public-key login succeeded; expected Windows identity"
+    }
+  ],
+  "not_tested": [
+    "Connection from a separate physical device",
+    "Another Tailscale peer's access policy and firewall path",
+    "Reboot and post-reboot login",
+    "Public-internet or router-forwarded access",
+    "Independent remote-to-WSL regression check",
+    "SFTP transfer",
+    "IPv6 login",
+    "Sleep/resume",
+    "Clean-machine execution of the later bundled setup script",
+    "Execution of documented rollback commands"
+  ],
+  "privacy": {
+    "omitted": ["Usernames", "Machine name", "Personal paths", "Private addresses", "Tailnet DNS name", "Wi-Fi name", "Key material and comments", "Host fingerprints", "Process IDs", "Unrelated Git service configuration"],
+    "retained": ["Versions", "Ports", "Standard paths", "Service and rule names", "Security principal SIDs", "Non-identifying error text"]
+  }
+}
